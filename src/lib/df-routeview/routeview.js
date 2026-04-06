@@ -1,10 +1,31 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 import L, {Map, TileLayer, Polyline, Control, CircleMarker, DomUtil} from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js";
 
-import mapcss from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css" with { type: "css" };
-document.adoptedStyleSheets.push(mapcss);
-import viewcss from './routeview.css' with { type: "css" };
-document.adoptedStyleSheets.push(viewcss);
+// workaround stupid webkit limitation that can't do import ... with { type: "css" }
+fetch('https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css')
+    .then(response => {
+      return response.text();
+    })
+    .then(cssText => { 
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(cssText);
+      document.adoptedStyleSheets.push(sheet);
+    });
+
+  fetch(import.meta.resolve('./routeview.css'))
+    .then(response => {
+      return response.text();
+    })
+    .then(cssText => { 
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(cssText);
+      document.adoptedStyleSheets.push(sheet);
+    });
+
+//import mapcss from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css" with { type: "css" };
+//document.adoptedStyleSheets.push(mapcss);
+//import viewcss from './routeview.css' with { type: "css" };
+//document.adoptedStyleSheets.push(viewcss);
 
 let _containerHeight = 0;
 let _containerWidth = 0;
