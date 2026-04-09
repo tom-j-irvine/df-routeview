@@ -1,34 +1,31 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 import L, {Map, TileLayer, Polyline, Control, CircleMarker, DomUtil} from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js";
 
-// workaround stupid webkit limitation that can't do import ... with { type: "css" }
-fetch('https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css')
-    .then(response => {
-      return response.text();
-    })
-    .then(cssText => { 
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(cssText);
-      document.adoptedStyleSheets.push(sheet);
-    });
-
-  fetch(import.meta.resolve('./routeview.css'))
-    .then(response => {
-      return response.text();
-    })
-    .then(cssText => { 
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(cssText);
-      document.adoptedStyleSheets.push(sheet);
-    });
-
 //import mapcss from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css" with { type: "css" };
 //document.adoptedStyleSheets.push(mapcss);
 //import viewcss from './routeview.css' with { type: "css" };
 //document.adoptedStyleSheets.push(viewcss);
 
-let _containerHeight = 0;
-let _containerWidth = 0;
+// workaround stupid webkit limitation that can't do import ... with { type: "css" }
+fetch('https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css')
+  .then(response => {
+    return response.text();
+  }).then(cssText => { 
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssText);
+    document.adoptedStyleSheets.push(sheet);
+  });
+
+fetch(import.meta.resolve('./routeview.css'))
+  .then(response => {
+    return response.text();
+  }).then(cssText => { 
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssText);
+    document.adoptedStyleSheets.push(sheet);
+  });
+
+let _containerDiv = null;
 let _points = [];
 let _breadCrumbsVisible = false;
 
@@ -53,15 +50,24 @@ const _map = {
   breadCrumb: null
 };
 
-const _chart = {     
+const _chart = {       
   height: 125,
   margin: { top: 10, right: 10, bottom: 20, left: 40 },
   minFeet: 300,
+  topOffset: 0,
+  div: null,
+  svg: null,
+  svgGroup: null,
   xScale: null,
+  xAxis: null,
   yScale: null,
+  yAxis: null,
+  path: null,
+  pathFloor: 0,
   toolTip: null,
   hLine: null,
   vLine: null,
+  eventRect: null,
   bisector: null,
   quadtree: null
 };
@@ -70,7 +76,7 @@ const metersToMiles = (meters) => meters / 1609.344;
 
 const metersToFeet = (meters) => meters * 3.28084;
 
-const drawMap = () => {
+const createMap = () => {
 
   // create base layers
   const baseLayers = _map.tileLayers.map(layer => new TileLayer(
@@ -119,13 +125,11 @@ const drawMap = () => {
 
 };
 
-const setRouteLine = () => {
-  
+const setRouteLine = () => {  
   _map.route = new Polyline(
     _points.map(p => [p.y, p.x]), 
     { color: "#f00" }
   ).addTo(_map.control);
-
   _map.control.fitBounds(_map.route.getBounds());
 };
 
@@ -168,80 +172,87 @@ const mapPointerMove = (e) => {
   }    
 };
 
-const drawChart = (chartDiv) => {
+const createChart = () => {
 
-  const svg = chartDiv.append("svg")
-    .attr("class", "df-elev-chart")
-    .attr("width", _containerWidth)
-    .attr("height", _chart.height)    
+  _chart.svg = _chart.div.append("svg")
+    .attr("class", "df-elev-chart")    
+    .attr("height", _chart.height);
+  
+  _chart.svgGroup = _chart.svg 
     .append("g")
-    .attr("transform",`translate(${_chart.margin.left}, ${_chart.margin.top})`);
-
-  const dataWidth = _containerWidth - _chart.margin.left - _chart.margin.right;
+    .attr("transform", `translate(${_chart.margin.left}, ${_chart.margin.top})`);
+  
+  _chart.pathFloor = d3.min(_points, p => p.e);
+  const max = d3.max(_points, p => p.e);
+  const ceiling = max - _chart.pathFloor < _chart.minFeet ? _chart.pathFloor + _chart.minFeet : max;
   const dataHeight = _chart.height - _chart.margin.top - _chart.margin.bottom;
 
-  const max = d3.max(_points, p => p.e);
-  const floor = d3.min(_points, p => p.e);
-  const ceiling = max - floor < _chart.minFeet ? floor + _chart.minFeet : max;
-
-  // x axis
+  // x scale/axis
   _chart.xScale = d3.scaleLinear()
-    .domain(d3.extent(_points, p => p.d))
-    .range([ 0, dataWidth ]);
+    .domain(d3.extent(_points, p => p.d));
   
-  svg.append("g")
-    .attr("transform", `translate(0, ${dataHeight})`)
-    .call(d3.axisBottom(_chart.xScale));
+  _chart.xAxis = _chart.svgGroup.append("g")
+    .attr("transform", `translate(0, ${dataHeight})`);
 
-  // y axis
+  // y scale/axis
   _chart.yScale = d3.scaleLinear()
-    .domain([floor, ceiling])
+    .domain([_chart.pathFloor, ceiling])
     .range([ dataHeight, 0 ]);
 
-  svg.append("g")       
+  _chart.yAxis = _chart.svgGroup.append("g")       
     .call(d3.axisLeft(_chart.yScale).ticks(5));    
   
   // plot the elevation
-  svg.append("path")
+  _chart.path = _chart.svgGroup.append("path")
     .datum(_points)
-    .attr("class", "df-elev-path")
-    .attr("d", d3.area()
+    .attr("class", "df-elev-path");
+            
+  _chart.vLine = _chart.svgGroup.append("line")
+    .attr("class", "df-elev-line")        
+    .attr("x1", 0)
+    .attr("y1", 0)
+    .attr("x2", 0)
+    .attr("y2", dataHeight);
+
+  _chart.hLine = _chart.svgGroup.append("line")
+    .attr("class", "df-elev-line")
+    .attr("x1", 0)
+    .attr("y1", dataHeight)    
+    .attr("y2", dataHeight);
+
+  _chart.toolTip = _chart.div.append("div")
+    .attr("class", "df-tooltip")
+    .style("top", (_chart.topOffset - _chart.height + 20) + "px");
+
+  // top-level invisible rectangle to handle mouse events
+  _chart.eventRect = _chart.svgGroup.append("rect")    
+    .attr("height", dataHeight)
+    .attr("class", "df-elev-overlay")        
+    .on('mouseover', showBreadcrumbs)
+    .on("mousemove", chartMouseMove)
+    .on('mouseout', hideBreadcrumbs);
+  
+  drawChart();
+  
+};
+
+const drawChart = () => {
+
+  const container = d3.select(`#${_containerDiv}`);  
+  const containerWidth = container.node().clientWidth;
+  const dataWidth = containerWidth - _chart.margin.left - _chart.margin.right;
+    
+  _chart.svg.attr("width", containerWidth);
+  _chart.xScale.range([ 0, dataWidth ]);
+  _chart.xAxis.call(d3.axisBottom(_chart.xScale));
+  _chart.path.attr("d", d3.area()
       .x(p => _chart.xScale(p.d))
-      .y0(_chart.yScale(floor))
+      .y0(_chart.yScale(_chart.pathFloor))
       .y1(p => _chart.yScale(p.e))      
     );
-            
-    _chart.vLine = svg.append("line")
-      .attr("class", "df-elev-line")        
-      .attr("x1", 0)
-      .attr("y1", 0)
-      .attr("x2", 0)
-      .attr("y2", dataHeight);
+  _chart.hLine.attr("x2", dataWidth);
+  _chart.eventRect.attr("width", dataWidth);  
 
-    _chart.hLine = svg.append("line")
-      .attr("class", "df-elev-line")
-      .attr("x1", 0)
-      .attr("y1", dataHeight)
-      .attr("x2", dataWidth)
-      .attr("y2", dataHeight);
-
-    _chart.toolTip = chartDiv.append("div")
-      .attr("class", "df-tooltip")
-      .style("top", (_containerHeight - _chart.height + 20) + "px");
-
-    // get the data index, by distance
-    _chart.bisector = d3.bisector(function (d) { return d.d; }).left;
-    // find point by x, y
-    _chart.quadtree = d3.quadtree().x(d => d.x).y(d => d.y).addAll(_points);
-    
-    // top-level invisible rectangle to handle mouse events
-    svg.append("rect")
-      .attr("width", dataWidth)
-      .attr("height", dataHeight)
-      .attr("class", "df-elev-overlay")        
-      .on('mouseover', showBreadcrumbs)
-      .on("mousemove", chartMouseMove)
-      .on('mouseout', hideBreadcrumbs);
 };
 
 const chartMouseMove = (e) => {
@@ -289,16 +300,19 @@ const hideBreadcrumbs = () => {
 
 const renderViewer = (divId, routeId) => {
   
-  const container = d3.select(`#${divId}`);  
+  _containerDiv = divId;
 
-  _containerWidth = container.node().clientWidth;
-  _containerHeight = container.node().clientHeight;
+  const container = d3.select(`#${_containerDiv}`);  
+  const containerHeight = container.node().clientHeight;
   
-  const map = container.append("div")
+  // map div
+  container.append("div")
     .attr("id", _map.divId)
-    .style("height", (_containerHeight - _chart.height) + "px");
+    .style("height", (containerHeight - _chart.height) + "px");
 
-  const chart = container.append("div");
+  // chart div
+  _chart.div = container.append("div");
+  _chart.topOffset = containerHeight;
   
   fetch(`./routes/${routeId}.json`)
     .then(response => {
@@ -314,8 +328,17 @@ const renderViewer = (divId, routeId) => {
         d: metersToMiles(p.d)
       }));
 
-      drawMap();
-      drawChart(chart);
+      // get the data index, by distance
+      _chart.bisector = d3.bisector(function (d) { return d.d; }).left;
+      
+      // find point by x, y
+      _chart.quadtree = d3.quadtree().x(d => d.x).y(d => d.y).addAll(_points);
+
+      createMap();
+      createChart();      
+      // responsive resizing of chart
+      window.onresize = drawChart;
+
     })
     .catch(error => {
       console.log(error);    
