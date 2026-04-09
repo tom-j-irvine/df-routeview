@@ -10,7 +10,7 @@
 - [X] show chart markers when moving on map
 - [ ] route summary (mileage, gain, etc.)
 - [X] common methods for showing/hiding breadcrumbs
-- [ ] handle resize of width (need to redraw chart) https://d3-graph-gallery.com/graph/custom_responsive.html
+- [X] handle resize of width (need to redraw chart)
 - [ ] color-coded route lines
 - [ ] color-coded chart
 - [ ] waypoints w/ icons
