@@ -14,6 +14,6 @@
 - [ ] color-coded route lines
 - [ ] color-coded chart
 - [ ] waypoints w/ icons
-- [ ] start/end icons
+- [X] start/end icons
 - [X] DF logo/watermark?
 - [X] move zoom control (lower-right)
