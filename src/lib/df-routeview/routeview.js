@@ -1,5 +1,5 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
-import L, {Map, TileLayer, Polyline, Control, CircleMarker, DomUtil} from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js";
+import L, {Map, TileLayer, Polyline, Control, CircleMarker, DivIcon, Icon, Marker, DomUtil} from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.js";
 
 //import mapcss from "https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css" with { type: "css" };
 //document.adoptedStyleSheets.push(mapcss);
@@ -117,7 +117,7 @@ const createMap = () => {
   logo.addTo(_map.control);
 
   setRouteLine();  
-  setMapBreadCrumbs();
+  setMarkers();
 
   // events  
   _map.control.on('pointermove', mapPointerMove);
@@ -133,7 +133,27 @@ const setRouteLine = () => {
   _map.control.fitBounds(_map.route.getBounds());
 };
 
-const setMapBreadCrumbs = () => {
+const setMarkers = () => {
+
+  new Marker([_points[0].y, _points[0].x], { 
+    icon: new DivIcon({
+      className: 'df-start-icon',
+      iconSize: [32, 32],
+      iconAnchor: [31, 31]
+    }),    
+    riseOnHover: true    
+  }).bindTooltip("Route Start").addTo(_map.control);
+
+  new Marker([_points[_points.length - 1].y, _points[_points.length - 1].x], { 
+    icon: new DivIcon({
+      className: 'df-end-icon',
+      iconSize: [32, 32],
+      iconAnchor: [1, 31]
+    }),    
+    riseOnHover: true    
+  }).bindTooltip("Route End").addTo(_map.control);
+  
+
   _map.breadCrumb = new CircleMarker([0, 0], { 
     radius: 6,     
     weight: 1, 
